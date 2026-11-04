@@ -1,18 +1,35 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="light dark">
-  <title>Document</title>
-
+  <title>我的服务</title>
 
   <style>
     :root {
       --spacing: 0.25rem;
       --container: 1600px;
-      color-scheme: light dark;
+      --card: rgba(255, 255, 255, 0.92);
+      --card-muted: #f4f4f5;
+      --border: rgba(24, 24, 27, 0.12);
+      --foreground: #18181b;
+      --muted: #71717a;
+      --hover: rgba(24, 24, 27, 0.04);
+      --accent: #2563eb;
+      color-scheme: light;
+    }
+
+    :root.dark {
+      --card: rgba(24, 25, 26, 0.92);
+      --card-muted: #202122;
+      --border: rgba(255, 255, 255, 0.12);
+      --foreground: #f4f4f5;
+      --muted: #a1a1aa;
+      --hover: rgba(255, 255, 255, 0.045);
+      --accent: #60a5fa;
+      color-scheme: dark;
     }
 
     *,
@@ -23,9 +40,17 @@
 
     html,
     body {
+      min-height: 100%;
       margin: 0;
       background: transparent !important;
-      color: CanvasText;
+      color: var(--foreground);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+        "Segoe UI", sans-serif;
+    }
+
+    button,
+    input {
+      font: inherit;
     }
 
     .container {
@@ -64,19 +89,619 @@
       .container { max-width: 90rem; }
     }
 
-    /* Match Beszel's final container override and responsive side gutters. */
     .container {
       max-width: var(--container);
       margin-inline: auto;
       padding-inline: calc(var(--spacing) * 4);
     }
+
+    .dashboard {
+      padding-block: 1.25rem 2rem;
+    }
+
+    .dashboard-header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 1rem;
+      padding-inline: 0.25rem;
+    }
+
+    .eyebrow {
+      margin: 0 0 0.25rem;
+      color: var(--muted);
+      font-size: 0.75rem;
+      font-weight: 650;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    h1,
+    h2,
+    p {
+      margin: 0;
+    }
+
+    h1 {
+      font-size: clamp(1.4rem, 3vw, 1.875rem);
+      line-height: 1.2;
+    }
+
+    .summary {
+      margin-top: 0.4rem;
+      color: var(--muted);
+      font-size: 0.875rem;
+    }
+
+    .refresh-button {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      min-height: 2.25rem;
+      padding: 0.45rem 0.8rem;
+      border: 1px solid var(--border);
+      border-radius: 0.55rem;
+      background: var(--card);
+      color: var(--foreground);
+      cursor: pointer;
+    }
+
+    .refresh-button:hover {
+      background: var(--card-muted);
+    }
+
+    .refresh-button:disabled {
+      cursor: wait;
+      opacity: 0.65;
+    }
+
+    .refresh-icon {
+      font-size: 1.05rem;
+      line-height: 1;
+    }
+
+    .refresh-button.is-loading .refresh-icon {
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .message {
+      padding: 2.5rem 1rem;
+      border: 1px dashed var(--border);
+      border-radius: 0.75rem;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .message.error {
+      border-color: rgba(239, 68, 68, 0.45);
+      color: #ef4444;
+    }
+
+    .systems {
+      display: grid;
+      gap: 1rem;
+    }
+
+    .system-card {
+      overflow: hidden;
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      background: var(--card);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.025);
+    }
+
+    .system-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 0.9rem 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .system-title-row {
+      display: flex;
+      align-items: center;
+      gap: 0.55rem;
+      min-width: 0;
+    }
+
+    .system-title {
+      overflow: hidden;
+      color: var(--foreground);
+      font-size: 1rem;
+      font-weight: 650;
+      text-decoration: none;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .system-title:hover {
+      color: var(--accent);
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+
+    .system-meta {
+      margin-top: 0.25rem;
+      color: var(--muted);
+      font-size: 0.78rem;
+    }
+
+    .system-count {
+      flex: 0 0 auto;
+      color: var(--muted);
+      font-size: 0.8rem;
+      white-space: nowrap;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      flex: 0 0 auto;
+      padding: 0.18rem 0.48rem;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      color: var(--muted);
+      font-size: 0.72rem;
+      font-weight: 550;
+      line-height: 1.2;
+    }
+
+    .dot {
+      width: 0.45rem;
+      height: 0.45rem;
+      border-radius: 999px;
+      background: #71717a;
+    }
+
+    .status-up .dot,
+    .health-healthy .dot {
+      background: #22c55e;
+    }
+
+    .status-down .dot,
+    .health-unhealthy .dot {
+      background: #ef4444;
+    }
+
+    .status-pending .dot,
+    .health-starting .dot {
+      background: #eab308;
+    }
+
+    .table-wrap {
+      max-width: 100%;
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      min-width: 970px;
+      border-collapse: collapse;
+      font-size: 0.82rem;
+      text-align: left;
+      white-space: nowrap;
+    }
+
+    th,
+    td {
+      padding: 0.68rem 0.75rem;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+
+    th {
+      background: var(--card-muted);
+      color: var(--muted);
+      font-size: 0.72rem;
+      font-weight: 650;
+      letter-spacing: 0.025em;
+    }
+
+    tbody tr:hover {
+      background: var(--hover);
+    }
+
+    tbody tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .container-name {
+      max-width: 180px;
+      overflow: hidden;
+      font-weight: 600;
+      text-overflow: ellipsis;
+    }
+
+    .image-name,
+    .container-status {
+      display: block;
+      max-width: 190px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .number {
+      font-variant-numeric: tabular-nums;
+    }
+
+    .empty-containers {
+      padding: 1.6rem 1rem;
+      color: var(--muted);
+      font-size: 0.85rem;
+      text-align: center;
+    }
+
+    @media (max-width: 40rem) {
+      .dashboard {
+        padding-top: 1rem;
+      }
+
+      .dashboard-header,
+      .system-header {
+        align-items: flex-start;
+      }
+
+      .dashboard-header {
+        flex-direction: column;
+      }
+
+      .refresh-button {
+        width: 100%;
+        justify-content: center;
+      }
+
+      .system-header {
+        padding: 0.8rem;
+      }
+
+      th,
+      td {
+        padding-inline: 0.65rem;
+      }
+    }
   </style>
 </head>
 
 <body>
-  <main class="container">
-    hello world
+  <main class="container dashboard">
+    <header class="dashboard-header">
+      <div>
+        <p class="eyebrow">我的服务</p>
+        <h1>所有客户端</h1>
+        <p id="summary" class="summary">正在加载客户端与容器信息…</p>
+      </div>
+      <button id="refresh-button" class="refresh-button" type="button">
+        <span class="refresh-icon" aria-hidden="true">↻</span>
+        <span>刷新</span>
+      </button>
+    </header>
+
+    <div id="message" class="message">正在加载客户端与容器信息…</div>
+    <section id="systems" class="systems" aria-live="polite"></section>
   </main>
+
+  <script>
+    (() => {
+      "use strict";
+
+      const REFRESH_INTERVAL = 60_000;
+      const SYSTEM_FIELDS = "id,name,host,port,info,status";
+      const CONTAINER_FIELDS =
+        "id,name,image,updatable,ports,cpu,memory,net,health,status,system,updated";
+
+      const summary = document.getElementById("summary");
+      const message = document.getElementById("message");
+      const systemsElement = document.getElementById("systems");
+      const refreshButton = document.getElementById("refresh-button");
+      let loading = false;
+
+      function escapeHtml(value) {
+        return String(value ?? "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+
+      function getAuthToken() {
+        const stored = localStorage.getItem("pocketbase_auth");
+        if (!stored) return "";
+        try {
+          return JSON.parse(stored)?.token || "";
+        } catch {
+          return "";
+        }
+      }
+
+      async function fetchCollection(collection, params) {
+        const token = getAuthToken();
+        if (!token) {
+          throw new Error("未找到 Beszel 登录信息，请刷新主页面后重试。");
+        }
+
+        const response = await fetch(
+          `/api/collections/${collection}/records?${params.toString()}`,
+          {
+            credentials: "same-origin",
+            headers: { Authorization: token },
+          },
+        );
+
+        if (!response.ok) {
+          if (response.status === 401 || response.status === 403) {
+            throw new Error("登录状态已失效，请重新登录 Beszel。");
+          }
+          throw new Error(`读取 ${collection} 失败（HTTP ${response.status}）。`);
+        }
+
+        const data = await response.json();
+        return Array.isArray(data.items) ? data.items : [];
+      }
+
+      function toTimestamp(value) {
+        const number = Number(value);
+        if (Number.isFinite(number) && number > 0) return number;
+        const parsed = Date.parse(value);
+        return Number.isFinite(parsed) ? parsed : 0;
+      }
+
+      function formatBytes(value, perSecond = false) {
+        let number = Number(value);
+        if (!Number.isFinite(number) || number < 0) return "-";
+        const units = perSecond
+          ? ["B/s", "KB/s", "MB/s", "GB/s", "TB/s"]
+          : ["B", "KB", "MB", "GB", "TB"];
+        let unitIndex = 0;
+        while (number >= 1024 && unitIndex < units.length - 1) {
+          number /= 1024;
+          unitIndex += 1;
+        }
+        const digits = number >= 10 || unitIndex === 0 ? 1 : 2;
+        return `${number.toFixed(digits)} ${units[unitIndex]}`;
+      }
+
+      function formatMemory(value) {
+        const megabytes = Number(value);
+        if (!Number.isFinite(megabytes) || megabytes < 0) return "-";
+        return formatBytes(megabytes * 1024 * 1024);
+      }
+
+      function formatCpu(value) {
+        const number = Number(value);
+        if (!Number.isFinite(number)) return "-";
+        return `${number.toFixed(number >= 10 ? 1 : 2)}%`;
+      }
+
+      function formatUpdated(value) {
+        const timestamp = toTimestamp(value);
+        if (!timestamp) return "-";
+        return new Intl.DateTimeFormat("zh-CN", {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: false,
+        }).format(new Date(timestamp));
+      }
+
+      function systemStatus(status) {
+        const normalized = String(status || "unknown").toLowerCase();
+        const labels = {
+          up: "在线",
+          down: "离线",
+          paused: "已暂停",
+          pending: "等待中",
+        };
+        return {
+          className: ["up", "down", "pending"].includes(normalized)
+            ? normalized
+            : "unknown",
+          label: labels[normalized] || status || "未知",
+        };
+      }
+
+      function healthStatus(health) {
+        const numericHealth = Number(health);
+        if (Number.isInteger(numericHealth)) {
+          const statuses = {
+            0: { className: "none", label: "无" },
+            1: { className: "starting", label: "启动中" },
+            2: { className: "healthy", label: "健康" },
+            3: { className: "unhealthy", label: "异常" },
+          };
+          if (statuses[numericHealth]) return statuses[numericHealth];
+        }
+
+        const normalized = String(health || "none").toLowerCase();
+        const labels = {
+          healthy: "健康",
+          unhealthy: "异常",
+          starting: "启动中",
+          none: "无",
+        };
+        return {
+          className: ["healthy", "unhealthy", "starting"].includes(normalized)
+            ? normalized
+            : "none",
+          label: labels[normalized] || health || "未知",
+        };
+      }
+
+      function currentContainers(containers) {
+        const latest = Math.max(0, ...containers.map((item) => toTimestamp(item.updated)));
+        if (!latest) return containers;
+        return containers.filter((item) => latest - toTimestamp(item.updated) < 70_000);
+      }
+
+      function renderContainerRow(container) {
+        const health = healthStatus(container.health);
+        const ports = container.ports || "-";
+        const updateMark = container.updatable
+          ? '<span title="镜像有可用更新"> ↑</span>'
+          : "";
+
+        return `
+          <tr>
+            <td class="container-name" title="${escapeHtml(container.name)}">
+              ${escapeHtml(container.name)}
+            </td>
+            <td class="number">${formatCpu(container.cpu)}</td>
+            <td class="number">${formatMemory(container.memory)}</td>
+            <td class="number">${formatBytes(container.net, true)}</td>
+            <td>
+              <span class="badge health-${health.className}">
+                <span class="dot"></span>${escapeHtml(health.label)}
+              </span>
+            </td>
+            <td title="${escapeHtml(ports)}">${escapeHtml(ports)}</td>
+            <td>
+              <span class="image-name" title="${escapeHtml(container.image)}">
+                ${escapeHtml(container.image)}${updateMark}
+              </span>
+            </td>
+            <td>
+              <span class="container-status" title="${escapeHtml(container.status)}">
+                ${escapeHtml(container.status || "-")}
+              </span>
+            </td>
+            <td class="number">${formatUpdated(container.updated)}</td>
+          </tr>`;
+      }
+
+      function renderSystem(system, containers) {
+        const status = systemStatus(system.status);
+        const host = system.host || "未设置地址";
+        const port = system.port ? `:${system.port}` : "";
+        const rows = containers.map(renderContainerRow).join("");
+        const content = rows
+          ? `
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>名称</th>
+                    <th>CPU</th>
+                    <th>内存</th>
+                    <th>网络</th>
+                    <th>健康</th>
+                    <th>端口</th>
+                    <th>镜像</th>
+                    <th>状态</th>
+                    <th>更新于</th>
+                  </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+              </table>
+            </div>`
+          : '<div class="empty-containers">当前没有可显示的容器。</div>';
+
+        return `
+          <article class="system-card">
+            <header class="system-header">
+              <div>
+                <div class="system-title-row">
+                  <a class="system-title" href="/system/${encodeURIComponent(system.id)}" target="_top">
+                    ${escapeHtml(system.name || system.id)}
+                  </a>
+                  <span class="badge status-${status.className}">
+                    <span class="dot"></span>${escapeHtml(status.label)}
+                  </span>
+                </div>
+                <p class="system-meta">${escapeHtml(host)}${escapeHtml(port)}</p>
+              </div>
+              <span class="system-count">${containers.length} 个容器</span>
+            </header>
+            ${content}
+          </article>`;
+      }
+
+      function render(systems, containers) {
+        const current = currentContainers(containers);
+        const grouped = new Map();
+        for (const container of current) {
+          const items = grouped.get(container.system) || [];
+          items.push(container);
+          grouped.set(container.system, items);
+        }
+
+        for (const items of grouped.values()) {
+          items.sort((left, right) =>
+            String(left.name || "").localeCompare(String(right.name || ""), "zh-CN"),
+          );
+        }
+
+        const sortedSystems = [...systems].sort((left, right) =>
+          String(left.name || "").localeCompare(String(right.name || ""), "zh-CN"),
+        );
+        const onlineCount = sortedSystems.filter(
+          (system) => String(system.status).toLowerCase() === "up",
+        ).length;
+
+        summary.textContent = `${sortedSystems.length} 个客户端 · ${onlineCount} 个在线 · ${current.length} 个容器`;
+        message.hidden = sortedSystems.length > 0;
+        systemsElement.innerHTML = sortedSystems
+          .map((system) => renderSystem(system, grouped.get(system.id) || []))
+          .join("");
+
+        if (!sortedSystems.length) {
+          message.className = "message";
+          message.textContent = "没有找到客户端。";
+        }
+      }
+
+      async function loadDashboard() {
+        if (loading) return;
+        loading = true;
+        refreshButton.disabled = true;
+        refreshButton.classList.add("is-loading");
+
+        try {
+          const systemParams = new URLSearchParams({
+            page: "1",
+            perPage: "500",
+            skipTotal: "1",
+            sort: "+name",
+            fields: SYSTEM_FIELDS,
+          });
+          const containerParams = new URLSearchParams({
+            page: "0",
+            perPage: "2000",
+            fields: CONTAINER_FIELDS,
+          });
+          const [systems, containers] = await Promise.all([
+            fetchCollection("systems", systemParams),
+            fetchCollection("containers", containerParams),
+          ]);
+          render(systems, containers);
+        } catch (error) {
+          systemsElement.innerHTML = "";
+          summary.textContent = "加载失败";
+          message.hidden = false;
+          message.className = "message error";
+          message.textContent = error instanceof Error ? error.message : "加载数据失败。";
+        } finally {
+          loading = false;
+          refreshButton.disabled = false;
+          refreshButton.classList.remove("is-loading");
+        }
+      }
+
+      refreshButton.addEventListener("click", loadDashboard);
+      document.addEventListener("visibilitychange", () => {
+        if (!document.hidden) loadDashboard();
+      });
+      window.setInterval(loadDashboard, REFRESH_INTERVAL);
+      loadDashboard();
+    })();
+  </script>
 </body>
 
 </html>
