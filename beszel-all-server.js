@@ -3,7 +3,10 @@
 
   const BUTTON_ID = "beszel-my-services";
   const STYLE_ID = "beszel-my-services-style";
+  const VIEW_ID = "beszel-my-services-view";
   const CONTAINERS_SELECTOR = 'a[href="/containers"]';
+  const MY_SERVICES_URL = "/all-server/";
+  const MY_SERVICES_CONTENT_URL = "/all-server/index.html";
 
   // Inline the SVG stored beside this script so the icon does not require a
   // second public Nginx location. `currentColor` keeps it theme-aware.
@@ -73,8 +76,86 @@
         opacity: 1;
         visibility: visible;
       }
+
+      #${VIEW_ID} {
+        position: fixed;
+        z-index: 10;
+        display: block;
+        border: 0;
+        background: var(--background, #fff);
+      }
+
+      #${VIEW_ID}[hidden] {
+        display: none;
+      }
+
+      html.beszel-my-services-active,
+      html.beszel-my-services-active body {
+        overflow: hidden;
+      }
     `;
     document.head.appendChild(style);
+  }
+
+  function isMyServicesRoute() {
+    return window.location.pathname.replace(/\/+$/, "") === "/all-server";
+  }
+
+  function getContentContainer() {
+    const containersLink = document.querySelector(CONTAINERS_SELECTOR);
+    const headerContainer = containersLink?.closest(".container");
+    return headerContainer?.nextElementSibling || null;
+  }
+
+  function getMyServicesView() {
+    let view = document.getElementById(VIEW_ID);
+    if (view) return view;
+
+    view = document.createElement("iframe");
+    view.id = VIEW_ID;
+    view.src = MY_SERVICES_CONTENT_URL;
+    view.title = "我的服务";
+    view.hidden = true;
+    document.body.appendChild(view);
+    return view;
+  }
+
+  function positionMyServicesView() {
+    if (!isMyServicesRoute()) return;
+
+    const contentContainer = getContentContainer();
+    if (!contentContainer) return;
+
+    const view = getMyServicesView();
+    const rect = contentContainer.getBoundingClientRect();
+    const top = Math.max(0, rect.top);
+    view.style.top = `${top}px`;
+    view.style.left = `${rect.left}px`;
+    view.style.width = `${rect.width}px`;
+    view.style.height = `${Math.max(0, window.innerHeight - top)}px`;
+    view.hidden = false;
+    document.documentElement.classList.add("beszel-my-services-active");
+  }
+
+  function hideMyServicesView() {
+    const view = document.getElementById(VIEW_ID);
+    if (view) view.hidden = true;
+    document.documentElement.classList.remove("beszel-my-services-active");
+  }
+
+  function syncMyServicesRoute() {
+    if (isMyServicesRoute()) {
+      positionMyServicesView();
+    } else {
+      hideMyServicesView();
+    }
+  }
+
+  function openMyServices() {
+    if (!isMyServicesRoute()) {
+      window.history.pushState({ beszelMyServices: true }, "", MY_SERVICES_URL);
+    }
+    syncMyServicesRoute();
   }
 
   function addMyServicesButton() {
@@ -89,6 +170,7 @@
     button.className = containersLink.className;
     button.setAttribute("aria-label", "我的服务");
     button.innerHTML = `${LOGO_SVG}<span class="beszel-my-services-tooltip" role="tooltip">我的服务<span class="beszel-my-services-tooltip-arrow" aria-hidden="true"><svg viewBox="0 0 30 10" preserveAspectRatio="none"><polygon points="0,0 30,0 15,10"></polygon></svg></span></span>`;
+    button.addEventListener("click", openMyServices);
 
     containersLink.before(button);
   }
@@ -100,8 +182,21 @@
     requestAnimationFrame(() => {
       scheduled = false;
       addMyServicesButton();
+      syncMyServicesRoute();
     });
   };
+
+  for (const method of ["pushState", "replaceState"]) {
+    const original = window.history[method];
+    window.history[method] = function (...args) {
+      const result = original.apply(this, args);
+      queueMicrotask(syncMyServicesRoute);
+      return result;
+    };
+  }
+
+  window.addEventListener("popstate", syncMyServicesRoute);
+  window.addEventListener("resize", positionMyServicesView);
 
   scheduleInsertion();
   new MutationObserver(scheduleInsertion).observe(document.documentElement, {
