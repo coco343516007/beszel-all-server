@@ -83,7 +83,7 @@
         z-index: 10;
         display: block;
         border: 0;
-        background: var(--background, #fff);
+        background: transparent;
       }
 
       #${VIEW_ID}[hidden] {
@@ -112,6 +112,27 @@
     return headerContainer?.nextElementSibling || null;
   }
 
+  function syncMyServicesTheme() {
+    const view = document.getElementById(VIEW_ID);
+    if (!view) return;
+
+    const isDark = document.documentElement.classList.contains("dark");
+    const colorScheme = isDark ? "dark" : "light";
+    view.style.colorScheme = colorScheme;
+
+    // The iframe is same-origin, so its canvas can follow Beszel's theme while
+    // both the iframe element and its document remain transparent.
+    const frameDocument = view.contentDocument;
+    if (!frameDocument) return;
+
+    frameDocument.documentElement.style.background = "transparent";
+    frameDocument.documentElement.style.colorScheme = colorScheme;
+    frameDocument.documentElement.classList.toggle("dark", isDark);
+    if (frameDocument.body) {
+      frameDocument.body.style.background = "transparent";
+    }
+  }
+
   function getMyServicesView() {
     let view = document.getElementById(VIEW_ID);
     if (view) return view;
@@ -120,6 +141,8 @@
     view.id = VIEW_ID;
     view.src = MY_SERVICES_CONTENT_URL;
     view.title = "我的服务";
+    view.setAttribute("allowtransparency", "true");
+    view.addEventListener("load", syncMyServicesTheme);
     view.hidden = true;
     document.body.appendChild(view);
     return view;
@@ -138,6 +161,7 @@
     view.style.left = `${rect.left}px`;
     view.style.width = `${rect.width}px`;
     view.style.height = `${Math.max(0, window.innerHeight - top)}px`;
+    syncMyServicesTheme();
     view.hidden = false;
     contentContainer.classList.add(SOURCE_HIDDEN_CLASS);
     document.documentElement.classList.add("beszel-my-services-active");
@@ -217,5 +241,9 @@
   new MutationObserver(scheduleInsertion).observe(document.documentElement, {
     childList: true,
     subtree: true,
+  });
+  new MutationObserver(syncMyServicesTheme).observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ["class"],
   });
 })();
