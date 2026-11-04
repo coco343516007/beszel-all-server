@@ -4,6 +4,7 @@
   const BUTTON_ID = "beszel-my-services";
   const STYLE_ID = "beszel-my-services-style";
   const VIEW_ID = "beszel-my-services-view";
+  const SOURCE_HIDDEN_CLASS = "beszel-my-services-source-hidden";
   const CONTAINERS_SELECTOR = 'a[href="/containers"]';
   const MY_SERVICES_URL = "/all-server/";
   const MY_SERVICES_CONTENT_URL = "/all-server/index.html";
@@ -89,6 +90,10 @@
         display: none;
       }
 
+      .${SOURCE_HIDDEN_CLASS} {
+        visibility: hidden;
+      }
+
       html.beszel-my-services-active,
       html.beszel-my-services-active body {
         overflow: hidden;
@@ -134,12 +139,16 @@
     view.style.width = `${rect.width}px`;
     view.style.height = `${Math.max(0, window.innerHeight - top)}px`;
     view.hidden = false;
+    contentContainer.classList.add(SOURCE_HIDDEN_CLASS);
     document.documentElement.classList.add("beszel-my-services-active");
   }
 
   function hideMyServicesView() {
     const view = document.getElementById(VIEW_ID);
     if (view) view.hidden = true;
+    document
+      .querySelectorAll(`.${SOURCE_HIDDEN_CLASS}`)
+      .forEach((element) => element.classList.remove(SOURCE_HIDDEN_CLASS));
     document.documentElement.classList.remove("beszel-my-services-active");
   }
 
