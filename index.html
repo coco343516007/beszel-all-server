@@ -10,19 +10,73 @@
 
   <style>
     :root {
+      --spacing: 0.25rem;
+      --container: 1600px;
       color-scheme: light dark;
+    }
+
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
     }
 
     html,
     body {
+      margin: 0;
       background: transparent !important;
       color: CanvasText;
+    }
+
+    .container {
+      width: 100%;
+    }
+
+    @media (min-width: 26.6rem) {
+      .container { max-width: 26.6rem; }
+    }
+
+    @media (min-width: 28rem) {
+      .container { max-width: 28rem; }
+    }
+
+    @media (min-width: 40rem) {
+      .container { max-width: 40rem; }
+    }
+
+    @media (min-width: 48rem) {
+      .container { max-width: 48rem; }
+    }
+
+    @media (min-width: 53rem) {
+      .container { max-width: 53rem; }
+    }
+
+    @media (min-width: 64rem) {
+      .container { max-width: 64rem; }
+    }
+
+    @media (min-width: 80rem) {
+      .container { max-width: 80rem; }
+    }
+
+    @media (min-width: 90rem) {
+      .container { max-width: 90rem; }
+    }
+
+    /* Match Beszel's final container override and responsive side gutters. */
+    .container {
+      max-width: var(--container);
+      margin-inline: auto;
+      padding-inline: calc(var(--spacing) * 4);
     }
   </style>
 </head>
 
 <body>
-  hello world
+  <main class="container">
+    hello world
+  </main>
 </body>
 
 </html>
