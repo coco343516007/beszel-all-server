@@ -58,35 +58,51 @@
     }
 
     @media (min-width: 26.6rem) {
-      .container { max-width: 26.6rem; }
+      .container {
+        max-width: 26.6rem;
+      }
     }
 
     @media (min-width: 28rem) {
-      .container { max-width: 28rem; }
+      .container {
+        max-width: 28rem;
+      }
     }
 
     @media (min-width: 40rem) {
-      .container { max-width: 40rem; }
+      .container {
+        max-width: 40rem;
+      }
     }
 
     @media (min-width: 48rem) {
-      .container { max-width: 48rem; }
+      .container {
+        max-width: 48rem;
+      }
     }
 
     @media (min-width: 53rem) {
-      .container { max-width: 53rem; }
+      .container {
+        max-width: 53rem;
+      }
     }
 
     @media (min-width: 64rem) {
-      .container { max-width: 64rem; }
+      .container {
+        max-width: 64rem;
+      }
     }
 
     @media (min-width: 80rem) {
-      .container { max-width: 80rem; }
+      .container {
+        max-width: 80rem;
+      }
     }
 
     @media (min-width: 90rem) {
-      .container { max-width: 90rem; }
+      .container {
+        max-width: 90rem;
+      }
     }
 
     .container {
@@ -166,7 +182,9 @@
     }
 
     @keyframes spin {
-      to { transform: rotate(360deg); }
+      to {
+        transform: rotate(360deg);
+      }
     }
 
     .message {
@@ -624,6 +642,7 @@
       }
 
       function render(systems, containers) {
+        console.log({ systems, containers });
         const current = currentContainers(containers);
         const grouped = new Map();
         for (const container of current) {
