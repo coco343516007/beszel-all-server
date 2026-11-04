@@ -217,24 +217,37 @@
     };
   }
 
-  function addEdge(
-    graphInstance,
-    source,
-    target,
-    theme,
-    emphasized = false,
-    flowing = false,
-  ) {
+  function spreadOffset(index, count, span) {
+    if (count <= 1) return 0;
+    return -span / 2 + (span * index) / (count - 1);
+  }
+
+  function addEdge(graphInstance, source, target, theme, options = {}) {
+    const online = Boolean(options.online);
+    const flowing = online && Boolean(options.flowing);
     graphInstance.addEdge({
-      source: { cell: source.id, anchor: { name: "bottom" } },
-      target: { cell: target.id, anchor: { name: "top" } },
-      router: { name: "manhattan", args: { padding: 16 } },
+      source: {
+        cell: source.id,
+        anchor: { name: "bottom", args: { dx: options.sourceOffset || 0 } },
+      },
+      target: {
+        cell: target.id,
+        anchor: { name: "top", args: { dx: options.targetOffset || 0 } },
+      },
+      router: {
+        name: "manhattan",
+        args: {
+          padding: options.padding || 28,
+          startDirections: ["bottom"],
+          endDirections: ["top"],
+        },
+      },
       connector: { name: "rounded", args: { radius: 12 } },
       attrs: {
         line: {
-          stroke: emphasized ? theme.accent : theme.edge,
-          strokeWidth: emphasized ? 2 : 1.35,
-          strokeDasharray: flowing ? "8 5" : emphasized ? "" : "5 4",
+          stroke: online ? theme.accent : theme.edge,
+          strokeWidth: online ? 2 : 1.35,
+          strokeDasharray: flowing ? "8 5" : online ? "" : "5 4",
           targetMarker: { name: "classic", size: 7 },
           style: flowing
             ? { animation: "beszel-edge-flow 0.75s linear infinite" }
@@ -267,8 +280,20 @@
     });
   }
 
-  function addContainerNode(graphInstance, container, position, theme) {
-    const status = text(container.status || container.health);
+  function addContainerNode(
+    graphInstance,
+    container,
+    position,
+    theme,
+    onlineOverride,
+  ) {
+    const recordedStatus = text(container.status || container.health);
+    const status =
+      typeof onlineOverride === "boolean"
+        ? onlineOverride
+          ? "up"
+          : "down"
+        : recordedStatus;
     return graphInstance.addNode({
       id: `container-${text(container.id, position.index)}`,
       shape: "beszel-topology-node",
@@ -452,7 +477,16 @@
       true,
     );
 
+    const rootEdgeCount = groups.length + data.rootContainers.length;
+    let rootEdgeIndex = 0;
+
     for (const [index, groupLayout] of groups.entries()) {
+      const systemOnline =
+        !groupLayout.group.system.virtual &&
+        isOnline(groupLayout.group.system.status);
+      const branchFlowing = groupLayout.group.containers.some((record) =>
+        hasNetworkTraffic(record.net),
+      );
       const systemNode = addSystemNode(
         graph,
         groupLayout.group.system,
@@ -468,44 +502,69 @@
         rootNode,
         systemNode,
         theme,
-        true,
-        groupLayout.group.containers.some((record) =>
-          hasNetworkTraffic(record.net),
-        ),
+        {
+          online: systemOnline,
+          flowing: branchFlowing,
+          sourceOffset: spreadOffset(rootEdgeIndex, rootEdgeCount, 170),
+          padding: 34,
+        },
       );
+      rootEdgeIndex += 1;
       groupLayout.group.containers.forEach((record, containerIndex) => {
+        const recordedOnline = isOnline(record.status || record.health);
+        const containerOnline = groupLayout.group.system.virtual
+          ? recordedOnline
+          : systemOnline;
+        const edgeOffset = spreadOffset(
+          containerIndex,
+          groupLayout.group.containers.length,
+          160,
+        );
         const containerNode = addContainerNode(
           graph,
           record,
           groupLayout.childPositions[containerIndex],
           theme,
+          containerOnline,
         );
         addEdge(
           graph,
           systemNode,
           containerNode,
           theme,
-          false,
-          hasNetworkTraffic(record.net),
+          {
+            online: containerOnline,
+            flowing: hasNetworkTraffic(record.net),
+            sourceOffset: edgeOffset,
+            targetOffset: edgeOffset,
+            padding: 20,
+          },
         );
       });
     }
 
     data.rootContainers.forEach((record, index) => {
+      const rootOnline = isOnline(data.root.status);
       const containerNode = addContainerNode(
         graph,
         record,
         rootContainerPositions[index],
         theme,
+        rootOnline,
       );
       addEdge(
         graph,
         rootNode,
         containerNode,
         theme,
-        false,
-        hasNetworkTraffic(record.net),
+        {
+          online: rootOnline,
+          flowing: hasNetworkTraffic(record.net),
+          sourceOffset: spreadOffset(rootEdgeIndex, rootEdgeCount, 170),
+          padding: 34,
+        },
       );
+      rootEdgeIndex += 1;
     });
 
     graph.on("node:click", ({ node }) => {
