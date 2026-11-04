@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
+  <title>我的服务</title>
+
+  <style>
+    :root {
+      --spacing: 0.25rem;
+      --container: 1600px;
+      --card: rgba(255, 255, 255, 0.92);
+      --card-muted: #f4f4f5;
+      --border: rgba(24, 24, 27, 0.12);
+      --foreground: #18181b;
+      --muted: #71717a;
+      --hover: rgba(24, 24, 27, 0.04);
+      --accent: #2563eb;
+      color-scheme: light;
+    }
+
+    :root.dark {
+      --card: rgba(24, 25, 26, 0.92);
+      --card-muted: #202122;
+      --border: rgba(255, 255, 255, 0.12);
+      --foreground: #f4f4f5;
+      --muted: #a1a1aa;
+      --hover: rgba(255, 255, 255, 0.045);
+      --accent: #60a5fa;
+      color-scheme: dark;
+    }
+
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      min-height: 100%;
+      margin: 0;
+      background: transparent !important;
+      color: var(--foreground);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+        "Segoe UI", sans-serif;
+    }
+
+    button,
+    input {
+      font: inherit;
+    }
+
+    .container {
+      width: 100%;
+    }
+
+    @media (min-width: 26.6rem) {
+      .container {
+        max-width: 26.6rem;
+      }
+    }
+
+    @media (min-width: 28rem) {
+      .container {
+        max-width: 28rem;
+      }
+    }
+
+    @media (min-width: 40rem) {
+      .container {
+        max-width: 40rem;
+      }
+    }
+
+    @media (min-width: 48rem) {
+      .container {
+        max-width: 48rem;
+      }
+    }
+
+    @media (min-width: 53rem) {
+      .container {
+        max-width: 53rem;
+      }
+    }
+
+    @media (min-width: 64rem) {
+      .container {
+        max-width: 64rem;
+      }
+    }
+
+    @media (min-width: 80rem) {
+      .container {
+        max-width: 80rem;
+      }
+    }
+
+    @media (min-width: 90rem) {
+      .container {
+        max-width: 90rem;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <main class="container dashboard">
+
+  </main>
+
+  <script>
+    (() => {
+      "use strict";
+
+      const REFRESH_INTERVAL = 60_000;
+      const SYSTEM_FIELDS = "id,name,host,port,info,status";
+      const CONTAINER_FIELDS =
+        "id,name,image,updatable,ports,cpu,memory,net,health,status,system,updated";
+
+      let loading = false;
+
+
+      function getAuthToken() {
+        const stored = localStorage.getItem("pocketbase_auth");
+        if (!stored) return "";
+        try {
+          return JSON.parse(stored)?.token || "";
+        } catch {
+          return "";
+        }
+      }
+
+      async function fetchCollection(collection, params) {
+        const token = getAuthToken();
+        if (!token) {
+          throw new Error("未找到 Beszel 登录信息，请刷新主页面后重试。");
+        }
+
+        const response = await fetch(
+          `/api/collections/${collection}/records?${params.toString()}`,
+          {
+            credentials: "same-origin",
+            headers: { Authorization: token },
+          },
+        );
+
+        if (!response.ok) {
+          if (response.status === 401 || response.status === 403) {
+            throw new Error("登录状态已失效，请重新登录 Beszel。");
+          }
+          throw new Error(`读取 ${collection} 失败（HTTP ${response.status}）。`);
+        }
+
+        const data = await response.json();
+        return Array.isArray(data.items) ? data.items : [];
+      }
+
+
+
+
+
+      function render(systems, containers) {
+        console.log({ systems, containers });
+      }
+
+      async function loadDashboard() {
+        if (loading) return;
+        loading = true;
+
+        try {
+          const systemParams = new URLSearchParams({
+            page: "1",
+            perPage: "500",
+            skipTotal: "1",
+            sort: "+name",
+            fields: SYSTEM_FIELDS,
+          });
+          const containerParams = new URLSearchParams({
+            page: "0",
+            perPage: "2000",
+            fields: CONTAINER_FIELDS,
+          });
+          const [systems, containers] = await Promise.all([
+            fetchCollection("systems", systemParams),
+            fetchCollection("containers", containerParams),
+          ]);
+          render(systems, containers);
+        } catch (error) {
+
+        } finally {
+          loading = false;
+        }
+      }
+
+      document.addEventListener("visibilitychange", () => {
+        if (!document.hidden) loadDashboard();
+      });
+      window.setInterval(loadDashboard, REFRESH_INTERVAL);
+      loadDashboard();
+    })();
+  </script>
+</body>
+
+</html>
