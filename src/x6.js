@@ -2,14 +2,18 @@
   "use strict";
 
   const NODE_HEIGHT = 64;
-  const COLUMN_GAP = 304;
-  const START_X = 42;
+  const SLOT_WIDTH = 272;
+  const COLUMN_GAP = 32;
+  const SIDE_PADDING = 32;
   const ROOT_Y = 42;
-  const SYSTEM_Y = 194;
-  const CONTAINER_Y = 346;
+  const GROUP_START_Y = 194;
+  const CHILD_GAP = 40;
+  const NODE_GAP = 24;
+  const GROUP_GAP = 48;
 
   let graph = null;
   let resizeObserver = null;
+  let resizeTimer = null;
   let registered = false;
 
   function text(value, fallback = "") {
@@ -81,6 +85,38 @@
     if (!details.length && container.image) details.push(shorten(container.image, 34));
     if (container.updatable) details.push("可更新");
     return details.join(" · ") || "容器";
+  }
+
+  function hasNetworkTraffic(value) {
+    if (typeof value === "number") return Number.isFinite(value) && Math.abs(value) > 0;
+    if (typeof value === "string") {
+      const normalized = value.trim();
+      if (!normalized) return false;
+      const numeric = Number(normalized);
+      if (Number.isFinite(numeric)) return Math.abs(numeric) > 0;
+      if (/^[\[{]/.test(normalized)) {
+        try {
+          return hasNetworkTraffic(JSON.parse(normalized));
+        } catch {
+          // Fall through to values such as "12 MB/s".
+        }
+      }
+      const match = normalized.match(/-?\d+(?:\.\d+)?/);
+      return match ? Math.abs(Number(match[0])) > 0 : false;
+    }
+    if (Array.isArray(value)) return value.some(hasNetworkTraffic);
+    if (value && typeof value === "object") {
+      const entries = Object.entries(value);
+      const trafficEntries = entries.filter(([key]) =>
+        /(?:rx|tx|recv|sent|receive|transmit|upload|download|bandwidth|bytes|rate|speed|net)/i.test(
+          key,
+        ),
+      );
+      return (trafficEntries.length ? trafficEntries : entries).some(([, item]) =>
+        hasNetworkTraffic(item),
+      );
+    }
+    return false;
   }
 
   function colors() {
@@ -181,7 +217,14 @@
     };
   }
 
-  function addEdge(graphInstance, source, target, theme, emphasized = false) {
+  function addEdge(
+    graphInstance,
+    source,
+    target,
+    theme,
+    emphasized = false,
+    flowing = false,
+  ) {
     graphInstance.addEdge({
       source: { cell: source.id, anchor: { name: "bottom" } },
       target: { cell: target.id, anchor: { name: "top" } },
@@ -191,8 +234,11 @@
         line: {
           stroke: emphasized ? theme.accent : theme.edge,
           strokeWidth: emphasized ? 2 : 1.35,
-          strokeDasharray: emphasized ? "" : "5 4",
+          strokeDasharray: flowing ? "8 5" : emphasized ? "" : "5 4",
           targetMarker: { name: "classic", size: 7 },
+          style: flowing
+            ? { animation: "beszel-edge-flow 0.75s linear infinite" }
+            : {},
         },
       },
       zIndex: 0,
@@ -304,51 +350,77 @@
     }
 
     registerNode();
+    clearTimeout(resizeTimer);
     resizeObserver?.disconnect();
     graph?.dispose();
     container.replaceChildren();
 
     const theme = colors();
     const data = groupData(options.systems, options.containers, options.rootName);
-    const columns = [];
-    let cursorX = START_X;
+    const layoutWidth = Math.max(container.clientWidth, 320);
+    const columnCount = Math.max(
+      1,
+      Math.floor(
+        (layoutWidth - SIDE_PADDING * 2 + COLUMN_GAP) /
+          (SLOT_WIDTH + COLUMN_GAP),
+      ),
+    );
+    const gridWidth = columnCount * SLOT_WIDTH + (columnCount - 1) * COLUMN_GAP;
+    const gridLeft = Math.max(0, (layoutWidth - gridWidth) / 2);
+    const columnHeights = Array(columnCount).fill(GROUP_START_Y);
+    const groups = [];
+
+    function shortestColumn() {
+      let target = 0;
+      for (let index = 1; index < columnHeights.length; index += 1) {
+        if (columnHeights[index] < columnHeights[target]) target = index;
+      }
+      return target;
+    }
+
+    function columnX(index) {
+      return gridLeft + index * (SLOT_WIDTH + COLUMN_GAP);
+    }
 
     for (const group of data.groups) {
-      const childPositions = [];
-      if (group.containers.length) {
-        for (let index = 0; index < group.containers.length; index += 1) {
-          childPositions.push({ x: cursorX, y: CONTAINER_Y, index });
-          cursorX += COLUMN_GAP;
-        }
-      } else {
-        childPositions.push({ x: cursorX, y: CONTAINER_Y, placeholder: true });
-        cursorX += COLUMN_GAP;
-      }
-      const firstX = childPositions[0].x;
-      const lastX = childPositions[childPositions.length - 1].x;
-      columns.push({
+      const targetColumn = shortestColumn();
+      const x = columnX(targetColumn);
+      const systemY = columnHeights[targetColumn];
+      const childPositions = group.containers.map((_, index) => ({
+        x,
+        y: systemY + NODE_HEIGHT + CHILD_GAP + index * (NODE_HEIGHT + NODE_GAP),
+        index,
+      }));
+      const lastChild = childPositions.at(-1);
+      const blockBottom = lastChild ? lastChild.y + NODE_HEIGHT : systemY + NODE_HEIGHT;
+      columnHeights[targetColumn] = blockBottom + GROUP_GAP;
+      groups.push({
         group,
         childPositions,
         systemPosition: {
-          x: (firstX + lastX) / 2 + 12,
-          y: SYSTEM_Y,
+          x: x + (SLOT_WIDTH - 248) / 2,
+          y: systemY,
         },
       });
     }
 
     const rootContainerPositions = data.rootContainers.map((_, index) => {
-      const position = { x: cursorX, y: CONTAINER_Y, index };
-      cursorX += COLUMN_GAP;
+      const targetColumn = shortestColumn();
+      const position = {
+        x: columnX(targetColumn),
+        y: columnHeights[targetColumn],
+        index,
+      };
+      columnHeights[targetColumn] += NODE_HEIGHT + GROUP_GAP;
       return position;
     });
-    if (!columns.length && !rootContainerPositions.length) cursorX += COLUMN_GAP;
 
     const viewportHeight = Math.max(container.clientHeight, 1);
 
     const { Graph } = window.X6;
     graph = new Graph({
       container,
-      width: Math.max(container.clientWidth, 320),
+      width: layoutWidth,
       height: viewportHeight,
       background: { color: "transparent" },
       grid: {
@@ -367,17 +439,11 @@
       },
     });
 
-    const firstX =
-      columns[0]?.childPositions[0]?.x ?? rootContainerPositions[0]?.x ?? START_X;
-    const lastX =
-      rootContainerPositions.at(-1)?.x ??
-      columns.at(-1)?.childPositions.at(-1)?.x ??
-      firstX;
     const rootNode = addSystemNode(
       graph,
       data.root,
       {
-        x: (firstX + lastX) / 2 + 17,
+        x: (layoutWidth - 238) / 2,
         y: ROOT_Y,
         index: "root",
         fallbackName: options.rootName,
@@ -386,26 +452,42 @@
       true,
     );
 
-    for (const [index, column] of columns.entries()) {
+    for (const [index, groupLayout] of groups.entries()) {
       const systemNode = addSystemNode(
         graph,
-        column.group.system,
+        groupLayout.group.system,
         {
-          ...column.systemPosition,
+          ...groupLayout.systemPosition,
           index,
           fallbackName: "未命名系统",
         },
         theme,
       );
-      addEdge(graph, rootNode, systemNode, theme, true);
-      column.group.containers.forEach((record, containerIndex) => {
+      addEdge(
+        graph,
+        rootNode,
+        systemNode,
+        theme,
+        true,
+        groupLayout.group.containers.some((record) =>
+          hasNetworkTraffic(record.net),
+        ),
+      );
+      groupLayout.group.containers.forEach((record, containerIndex) => {
         const containerNode = addContainerNode(
           graph,
           record,
-          column.childPositions[containerIndex],
+          groupLayout.childPositions[containerIndex],
           theme,
         );
-        addEdge(graph, systemNode, containerNode, theme);
+        addEdge(
+          graph,
+          systemNode,
+          containerNode,
+          theme,
+          false,
+          hasNetworkTraffic(record.net),
+        );
       });
     }
 
@@ -416,7 +498,14 @@
         rootContainerPositions[index],
         theme,
       );
-      addEdge(graph, rootNode, containerNode, theme);
+      addEdge(
+        graph,
+        rootNode,
+        containerNode,
+        theme,
+        false,
+        hasNetworkTraffic(record.net),
+      );
     });
 
     graph.on("node:click", ({ node }) => {
@@ -433,7 +522,13 @@
       const width = entries[0]?.contentRect.width;
       const height = entries[0]?.contentRect.height;
       if (!width || !height || !graph) return;
-      graph.resize(Math.max(width, 320), Math.max(height, 1));
+      const nextWidth = Math.max(width, 320);
+      if (Math.abs(nextWidth - layoutWidth) > 1) {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => render(options), 100);
+        return;
+      }
+      graph.resize(nextWidth, Math.max(height, 1));
     });
     resizeObserver.observe(container);
 

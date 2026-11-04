@@ -169,6 +169,18 @@
       cursor: grabbing;
     }
 
+    @keyframes beszel-edge-flow {
+      to {
+        stroke-dashoffset: -26;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      #topology path {
+        animation: none !important;
+      }
+    }
+
     .dashboard-message {
       position: absolute;
       top: 5.25rem;
@@ -227,7 +239,7 @@
   </main>
 
   <script src="./lib/x6.min.js"></script>
-  <script src="./x6.js?v=20261104-x6-v3"></script>
+  <script src="./x6.js?v=20261104-x6-v4"></script>
   <script>
     (() => {
       "use strict";
