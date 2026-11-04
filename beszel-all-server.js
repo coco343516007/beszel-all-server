@@ -162,7 +162,13 @@
 
   function openMyServices() {
     if (!isMyServicesRoute()) {
-      window.history.pushState({ beszelMyServices: true }, "", MY_SERVICES_URL);
+      const state = { beszelMyServices: true };
+      window.history.pushState(state, "", MY_SERVICES_URL);
+
+      // pushState does not emit popstate. Beszel's router therefore keeps the
+      // previous route selected and ignores a click back to that same route.
+      // Notify it so every header link can leave the custom route immediately.
+      window.dispatchEvent(new PopStateEvent("popstate", { state }));
     }
     syncMyServicesRoute();
   }
