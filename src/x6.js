@@ -2,10 +2,11 @@
   "use strict";
 
   const NODE_HEIGHT = 64;
-  const ROW_GAP = 84;
-  const ROOT_X = 48;
-  const SYSTEM_X = 350;
-  const CONTAINER_X = 690;
+  const COLUMN_GAP = 304;
+  const START_X = 42;
+  const ROOT_Y = 42;
+  const SYSTEM_Y = 194;
+  const CONTAINER_Y = 346;
 
   let graph = null;
   let resizeObserver = null;
@@ -182,9 +183,10 @@
 
   function addEdge(graphInstance, source, target, theme, emphasized = false) {
     graphInstance.addEdge({
-      source: { cell: source.id, anchor: { name: "right" } },
-      target: { cell: target.id, anchor: { name: "left" } },
-      connector: { name: "smooth" },
+      source: { cell: source.id, anchor: { name: "bottom" } },
+      target: { cell: target.id, anchor: { name: "top" } },
+      router: { name: "manhattan", args: { padding: 16 } },
+      connector: { name: "rounded", args: { radius: 12 } },
       attrs: {
         line: {
           stroke: emphasized ? theme.accent : theme.edge,
@@ -308,39 +310,40 @@
 
     const theme = colors();
     const data = groupData(options.systems, options.containers, options.rootName);
-    const rows = [];
-    let cursorY = 42;
+    const columns = [];
+    let cursorX = START_X;
 
     for (const group of data.groups) {
       const childPositions = [];
       if (group.containers.length) {
         for (let index = 0; index < group.containers.length; index += 1) {
-          childPositions.push({ x: CONTAINER_X, y: cursorY, index });
-          cursorY += ROW_GAP;
+          childPositions.push({ x: cursorX, y: CONTAINER_Y, index });
+          cursorX += COLUMN_GAP;
         }
       } else {
-        childPositions.push({ x: CONTAINER_X, y: cursorY, placeholder: true });
-        cursorY += ROW_GAP;
+        childPositions.push({ x: cursorX, y: CONTAINER_Y, placeholder: true });
+        cursorX += COLUMN_GAP;
       }
-      const firstY = childPositions[0].y;
-      const lastY = childPositions[childPositions.length - 1].y;
-      rows.push({
+      const firstX = childPositions[0].x;
+      const lastX = childPositions[childPositions.length - 1].x;
+      columns.push({
         group,
         childPositions,
-        systemPosition: { x: SYSTEM_X, y: (firstY + lastY) / 2 },
+        systemPosition: {
+          x: (firstX + lastX) / 2 + 12,
+          y: SYSTEM_Y,
+        },
       });
     }
 
     const rootContainerPositions = data.rootContainers.map((_, index) => {
-      const position = { x: CONTAINER_X, y: cursorY, index };
-      cursorY += ROW_GAP;
+      const position = { x: cursorX, y: CONTAINER_Y, index };
+      cursorX += COLUMN_GAP;
       return position;
     });
-    if (!rows.length && !rootContainerPositions.length) cursorY += ROW_GAP;
+    if (!columns.length && !rootContainerPositions.length) cursorX += COLUMN_GAP;
 
-    const contentHeight = Math.max(520, cursorY + 24);
-    const viewportHeight = Math.min(Math.max(contentHeight, 520), 820);
-    container.style.height = `${viewportHeight}px`;
+    const viewportHeight = Math.max(container.clientHeight, 1);
 
     const { Graph } = window.X6;
     graph = new Graph({
@@ -364,18 +367,18 @@
       },
     });
 
-    const firstY =
-      rows[0]?.childPositions[0]?.y ?? rootContainerPositions[0]?.y ?? 42;
-    const lastY =
-      rootContainerPositions.at(-1)?.y ??
-      rows.at(-1)?.childPositions.at(-1)?.y ??
-      firstY;
+    const firstX =
+      columns[0]?.childPositions[0]?.x ?? rootContainerPositions[0]?.x ?? START_X;
+    const lastX =
+      rootContainerPositions.at(-1)?.x ??
+      columns.at(-1)?.childPositions.at(-1)?.x ??
+      firstX;
     const rootNode = addSystemNode(
       graph,
       data.root,
       {
-        x: ROOT_X,
-        y: (firstY + lastY) / 2,
+        x: (firstX + lastX) / 2 + 17,
+        y: ROOT_Y,
         index: "root",
         fallbackName: options.rootName,
       },
@@ -383,23 +386,23 @@
       true,
     );
 
-    for (const [index, row] of rows.entries()) {
+    for (const [index, column] of columns.entries()) {
       const systemNode = addSystemNode(
         graph,
-        row.group.system,
+        column.group.system,
         {
-          ...row.systemPosition,
+          ...column.systemPosition,
           index,
           fallbackName: "未命名系统",
         },
         theme,
       );
       addEdge(graph, rootNode, systemNode, theme, true);
-      row.group.containers.forEach((record, containerIndex) => {
+      column.group.containers.forEach((record, containerIndex) => {
         const containerNode = addContainerNode(
           graph,
           record,
-          row.childPositions[containerIndex],
+          column.childPositions[containerIndex],
           theme,
         );
         addEdge(graph, systemNode, containerNode, theme);
@@ -428,8 +431,9 @@
 
     resizeObserver = new ResizeObserver((entries) => {
       const width = entries[0]?.contentRect.width;
-      if (!width || !graph) return;
-      graph.resize(Math.max(width, 320), viewportHeight);
+      const height = entries[0]?.contentRect.height;
+      if (!width || !height || !graph) return;
+      graph.resize(Math.max(width, 320), Math.max(height, 1));
     });
     resizeObserver.observe(container);
 

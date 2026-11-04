@@ -7,7 +7,7 @@
   const SOURCE_HIDDEN_CLASS = "beszel-my-services-source-hidden";
   const CONTAINERS_SELECTOR = 'a[href="/containers"]';
   const MY_SERVICES_URL = "/all-server/";
-  const MY_SERVICES_CONTENT_URL = "/all-server/index.html?v=20261104-x6";
+  const MY_SERVICES_CONTENT_URL = "/all-server/index.html?v=20261104-x6-v3";
 
   // Inline the SVG stored beside this script so the icon does not require a
   // second public Nginx location. `currentColor` keeps it theme-aware.
