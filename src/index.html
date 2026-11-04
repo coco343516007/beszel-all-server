@@ -104,24 +104,146 @@
         max-width: 90rem;
       }
     }
+
+    .dashboard {
+      margin: 0 auto;
+      padding: 1rem;
+    }
+
+    .topology-card {
+      position: relative;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      border-radius: 0.85rem;
+      background: var(--card);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    }
+
+    .topology-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      min-height: 4.5rem;
+      padding: 0.85rem 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .topology-heading {
+      min-width: 0;
+    }
+
+    .topology-heading h1 {
+      margin: 0;
+      font-size: 1.05rem;
+      line-height: 1.5;
+    }
+
+    .topology-heading p,
+    .topology-help {
+      margin: 0.2rem 0 0;
+      color: var(--muted);
+      font-size: 0.75rem;
+    }
+
+    .topology-help {
+      flex: 0 0 auto;
+      text-align: right;
+    }
+
+    #topology {
+      width: 100%;
+      min-height: 32.5rem;
+      overflow: hidden;
+      cursor: grab;
+    }
+
+    #topology:active {
+      cursor: grabbing;
+    }
+
+    .dashboard-message {
+      position: absolute;
+      top: 5.25rem;
+      left: 50%;
+      z-index: 5;
+      max-width: calc(100% - 2rem);
+      padding: 0.55rem 0.8rem;
+      transform: translateX(-50%);
+      border: 1px solid color-mix(in srgb, #f59e0b 40%, transparent);
+      border-radius: 0.6rem;
+      background: color-mix(in srgb, #f59e0b 12%, var(--card));
+      color: var(--foreground);
+      font-size: 0.78rem;
+      text-align: center;
+    }
+
+    .dashboard-message.error {
+      border-color: color-mix(in srgb, #ef4444 45%, transparent);
+      background: color-mix(in srgb, #ef4444 12%, var(--card));
+    }
+
+    .dashboard-message[hidden] {
+      display: none;
+    }
+
+    @media (max-width: 40rem) {
+      .dashboard {
+        padding: 0.5rem;
+      }
+
+      .topology-header {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .topology-help {
+        text-align: left;
+      }
+    }
   </style>
 </head>
 
 <body>
   <main class="container dashboard">
-
+    <section class="topology-card" aria-labelledby="topology-title">
+      <header class="topology-header">
+        <div class="topology-heading">
+          <h1 id="topology-title">服务拓扑</h1>
+          <p id="topology-summary">正在读取系统和容器…</p>
+        </div>
+        <p class="topology-help">拖动画布 · Ctrl/⌘ + 滚轮缩放 · 点击系统进入详情</p>
+      </header>
+      <div id="topology" role="img" aria-label="系统与容器服务拓扑图"></div>
+      <div id="dashboard-message" class="dashboard-message" role="status" aria-live="polite" hidden></div>
+    </section>
   </main>
 
+  <script src="./lib/x6.min.js"></script>
+  <script src="./x6.js?v=20261104-x6"></script>
   <script>
     (() => {
       "use strict";
 
+      const ROOT_NAME = "xcloud";
       const REFRESH_INTERVAL = 60_000;
       const SYSTEM_FIELDS = "id,name,host,port,info,status";
       const CONTAINER_FIELDS =
         "id,name,image,updatable,ports,cpu,memory,net,health,status,system,updated";
 
       let loading = false;
+      let lastSystems = [];
+      let lastContainers = [];
+
+      const topologyElement = document.getElementById("topology");
+      const summaryElement = document.getElementById("topology-summary");
+      const messageElement = document.getElementById("dashboard-message");
+
+      function showMessage(message = "", type = "warning") {
+        messageElement.textContent = message;
+        messageElement.classList.toggle("error", type === "error");
+        messageElement.hidden = !message;
+      }
 
 
       function getAuthToken() {
@@ -160,16 +282,33 @@
       }
 
 
-
-
-
       function render(systems, containers) {
-        console.log({ systems, containers });
+        lastSystems = systems;
+        lastContainers = containers;
+
+        const result = window.BeszelTopology.render({
+          container: topologyElement,
+          rootName: ROOT_NAME,
+          systems,
+          containers,
+        });
+
+        summaryElement.textContent =
+          `${result.systems} 个系统 · ${result.containers} 个容器 · 根节点 ${ROOT_NAME}`;
+
+        if (!result.rootFound) {
+          showMessage(`未找到名称为“${ROOT_NAME}”的系统，当前使用同名虚拟根节点。`);
+        } else if (result.unassigned) {
+          showMessage(`${result.unassigned} 个容器没有有效的 system 关联，已归入“未分配”。`);
+        } else {
+          showMessage();
+        }
       }
 
       async function loadDashboard() {
         if (loading) return;
         loading = true;
+        summaryElement.textContent = "正在读取系统和容器…";
 
         try {
           const systemParams = new URLSearchParams({
@@ -190,11 +329,22 @@
           ]);
           render(systems, containers);
         } catch (error) {
-
+          console.error("加载服务拓扑失败", error);
+          summaryElement.textContent = "服务拓扑加载失败";
+          showMessage(error?.message || "读取系统和容器失败。", "error");
         } finally {
           loading = false;
         }
       }
+
+      new MutationObserver(() => {
+        if (lastSystems.length || lastContainers.length) {
+          render(lastSystems, lastContainers);
+        }
+      }).observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ["class"],
+      });
 
       document.addEventListener("visibilitychange", () => {
         if (!document.hidden) loadDashboard();
