@@ -7,7 +7,7 @@
   const SOURCE_HIDDEN_CLASS = "beszel-my-services-source-hidden";
   const CONTAINERS_SELECTOR = 'a[href="/containers"]';
   const MY_SERVICES_URL = "/all-server/";
-  const MY_SERVICES_CONTENT_URL = "/all-server/index.html?v=20261105-x6-v15";
+  const MY_SERVICES_CONTENT_URL = "/all-server/index.html?v=20261105-x6-v20";
 
   // Inline the SVG stored beside this script so the icon does not require a
   // second public Nginx location. `currentColor` keeps it theme-aware.
@@ -124,10 +124,12 @@
     // both the iframe element and its document remain transparent.
     const frameDocument = view.contentDocument;
     if (!frameDocument) return;
+    const frameRoot = frameDocument.documentElement;
+    if (!frameRoot) return;
 
-    frameDocument.documentElement.style.background = "transparent";
-    frameDocument.documentElement.style.colorScheme = colorScheme;
-    frameDocument.documentElement.classList.toggle("dark", isDark);
+    frameRoot.style.background = "transparent";
+    frameRoot.style.colorScheme = colorScheme;
+    frameRoot.classList.toggle("dark", isDark);
     if (frameDocument.body) {
       frameDocument.body.style.background = "transparent";
     }
