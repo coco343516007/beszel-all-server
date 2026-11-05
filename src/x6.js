@@ -15,6 +15,7 @@
   let resizeObserver = null;
   let resizeTimer = null;
   let registered = false;
+  let lastOptions = null;
 
   function text(value, fallback = "") {
     const normalized = String(value ?? "").trim();
@@ -222,9 +223,22 @@
     return -span / 2 + (span * index) / (count - 1);
   }
 
+  function trafficLineAttrs(theme, flowing) {
+    return {
+      stroke: flowing ? theme.accent : theme.edge,
+      strokeWidth: flowing ? 2 : 1.35,
+      strokeDasharray: flowing ? "8 5" : "5 4",
+      targetMarker: { name: "classic", size: 7 },
+      style: {
+        animation: flowing
+          ? "beszel-edge-flow 0.75s linear infinite"
+          : "none",
+      },
+    };
+  }
+
   function addEdge(graphInstance, source, target, theme, options = {}) {
-    const online = Boolean(options.online);
-    const flowing = online && Boolean(options.flowing);
+    const flowing = Boolean(options.flowing);
     graphInstance.addEdge({
       source: {
         cell: source.id,
@@ -244,16 +258,9 @@
       },
       connector: { name: "rounded", args: { radius: 12 } },
       attrs: {
-        line: {
-          stroke: online ? theme.accent : theme.edge,
-          strokeWidth: online ? 2 : 1.35,
-          strokeDasharray: flowing ? "8 5" : online ? "" : "5 4",
-          targetMarker: { name: "classic", size: 7 },
-          style: flowing
-            ? { animation: "beszel-edge-flow 0.75s linear infinite" }
-            : {},
-        },
+        line: trafficLineAttrs(theme, flowing),
       },
+      data: { trafficKey: text(options.trafficKey) },
       zIndex: 0,
     });
   }
@@ -375,6 +382,7 @@
     }
 
     registerNode();
+    lastOptions = options;
     clearTimeout(resizeTimer);
     resizeObserver?.disconnect();
     graph?.dispose();
@@ -503,8 +511,8 @@
         systemNode,
         theme,
         {
-          online: systemOnline,
           flowing: branchFlowing,
+          trafficKey: `system-${text(groupLayout.group.system.id, index)}`,
           sourceOffset: spreadOffset(rootEdgeIndex, rootEdgeCount, 170),
           padding: 34,
         },
@@ -533,8 +541,8 @@
           containerNode,
           theme,
           {
-            online: containerOnline,
             flowing: hasNetworkTraffic(record.net),
+            trafficKey: `container-${text(record.id, containerIndex)}`,
             sourceOffset: edgeOffset,
             targetOffset: edgeOffset,
             padding: 20,
@@ -558,8 +566,8 @@
         containerNode,
         theme,
         {
-          online: rootOnline,
           flowing: hasNetworkTraffic(record.net),
+          trafficKey: `container-${text(record.id, index)}`,
           sourceOffset: spreadOffset(rootEdgeIndex, rootEdgeCount, 170),
           padding: 34,
         },
@@ -584,7 +592,7 @@
       const nextWidth = Math.max(width, 320);
       if (Math.abs(nextWidth - layoutWidth) > 1) {
         clearTimeout(resizeTimer);
-        resizeTimer = setTimeout(() => render(options), 100);
+        resizeTimer = setTimeout(() => render(lastOptions || options), 100);
         return;
       }
       graph.resize(nextWidth, Math.max(height, 1));
@@ -601,5 +609,50 @@
     };
   }
 
-  window.BeszelTopology = Object.freeze({ render });
+  function updateTraffic(options) {
+    if (!graph) return null;
+
+    lastOptions = { ...(lastOptions || {}), ...options };
+    const theme = colors();
+    const data = groupData(options.systems, options.containers, options.rootName);
+    const trafficByEdge = new Map();
+
+    data.groups.forEach((group, groupIndex) => {
+      trafficByEdge.set(
+        `system-${text(group.system.id, groupIndex)}`,
+        group.containers.some((record) => hasNetworkTraffic(record.net)),
+      );
+      group.containers.forEach((record, containerIndex) => {
+        trafficByEdge.set(
+          `container-${text(record.id, containerIndex)}`,
+          hasNetworkTraffic(record.net),
+        );
+      });
+    });
+
+    data.rootContainers.forEach((record, index) => {
+      trafficByEdge.set(
+        `container-${text(record.id, index)}`,
+        hasNetworkTraffic(record.net),
+      );
+    });
+
+    graph.getEdges().forEach((edge) => {
+      const trafficKey = text(edge.getData()?.trafficKey);
+      edge.attr({
+        line: trafficLineAttrs(theme, Boolean(trafficByEdge.get(trafficKey))),
+      });
+    });
+
+    return {
+      rootFound: Boolean(data.rootSystem),
+      root: data.root,
+      systems: Array.isArray(options.systems) ? options.systems.length : 0,
+      containers: Array.isArray(options.containers) ? options.containers.length : 0,
+      unassigned:
+        data.groups.find((group) => group.unassigned)?.containers.length || 0,
+    };
+  }
+
+  window.BeszelTopology = Object.freeze({ render, updateTraffic });
 })();

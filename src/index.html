@@ -57,7 +57,8 @@
     .container {
       width: 100%;
     }
-/* 
+
+    /*
     @media (min-width: 26.6rem) {
       .container {
         max-width: 26.6rem;
@@ -239,7 +240,7 @@
   </main>
 
   <script src="./lib/x6.min.js"></script>
-  <script src="./x6.js?v=20261104-x6-v5"></script>
+  <script src="./x6.js?v=20261105-x6-v6"></script>
   <script>
     (() => {
       "use strict";
@@ -301,17 +302,7 @@
       }
 
 
-      function render(systems, containers) {
-        lastSystems = systems;
-        lastContainers = containers;
-
-        const result = window.BeszelTopology.render({
-          container: topologyElement,
-          rootName: ROOT_NAME,
-          systems,
-          containers,
-        });
-
+      function applyResult(result) {
         summaryElement.textContent =
           `${result.systems} 个系统 · ${result.containers} 个容器 · 根节点 ${ROOT_NAME}`;
 
@@ -324,10 +315,42 @@
         }
       }
 
-      async function loadDashboard() {
+      function render(systems, containers) {
+        lastSystems = systems;
+        lastContainers = containers;
+
+        const result = window.BeszelTopology.render({
+          container: topologyElement,
+          rootName: ROOT_NAME,
+          systems,
+          containers,
+        });
+
+        applyResult(result);
+      }
+
+      function updateTraffic(systems, containers) {
+        lastSystems = systems;
+        lastContainers = containers;
+
+        const result = window.BeszelTopology.updateTraffic({
+          rootName: ROOT_NAME,
+          systems,
+          containers,
+        });
+
+        if (!result) {
+          render(systems, containers);
+          return;
+        }
+
+        applyResult(result);
+      }
+
+      async function loadDashboard({ init = false } = {}) {
         if (loading) return;
         loading = true;
-        summaryElement.textContent = "正在读取系统和容器…";
+        if (init) summaryElement.textContent = "正在读取系统和容器…";
 
         try {
           const systemParams = new URLSearchParams({
@@ -346,7 +369,11 @@
             fetchCollection("systems", systemParams),
             fetchCollection("containers", containerParams),
           ]);
-          render(systems, containers);
+          if (init) {
+            render(systems, containers);
+          } else {
+            updateTraffic(systems, containers);
+          }
         } catch (error) {
           console.error("加载服务拓扑失败", error);
           summaryElement.textContent = "服务拓扑加载失败";
@@ -369,7 +396,7 @@
         if (!document.hidden) loadDashboard();
       });
       window.setInterval(loadDashboard, REFRESH_INTERVAL);
-      loadDashboard();
+      loadDashboard({ init: true });
     })();
   </script>
 </body>
