@@ -23,6 +23,13 @@
   const CHILD_GAP = 40;
   const NODE_GAP = 24;
   const GROUP_GAP = 48;
+  const SYSTEM_ORBIT_X = 520;
+  const SYSTEM_ORBIT_Y = 400;
+  const FAN_START_RADIUS = 360;
+  const FAN_RING_GAP = 220;
+  const FAN_FIRST_CAPACITY = 5;
+  const FAN_CAPACITY_STEP = 2;
+  const FAN_MAX_SPAN = 144;
 
   let graph = null;
   let resizeObserver = null;
@@ -252,6 +259,7 @@
 
   function addEdge(graphInstance, source, target, theme, options = {}) {
     const flowing = Boolean(options.flowing);
+    const radial = Boolean(options.radial);
     const sourceSide = options.sourceSide || "bottom";
     const targetSide = options.targetSide || "top";
 
@@ -265,24 +273,32 @@
     graphInstance.addEdge({
       source: {
         cell: source.id,
-        anchor: anchor(sourceSide, options.sourceOffset || 0),
+        anchor: radial
+          ? { name: "center" }
+          : anchor(sourceSide, options.sourceOffset || 0),
       },
       target: {
         cell: target.id,
-        anchor: anchor(targetSide, options.targetOffset || 0),
+        anchor: radial
+          ? { name: "center" }
+          : anchor(targetSide, options.targetOffset || 0),
       },
       vertices: Array.isArray(options.vertices) ? options.vertices : [],
-      router: {
-        name: "manhattan",
-        args: {
-          step: ROUTER_STEP,
-          maxLoopCount: ROUTER_MAX_LOOPS,
-          padding: options.padding || 28,
-          startDirections: [sourceSide],
-          endDirections: [targetSide],
-        },
-      },
-      connector: { name: "rounded", args: { radius: 12 } },
+      router: radial
+        ? { name: "normal" }
+        : {
+            name: "manhattan",
+            args: {
+              step: ROUTER_STEP,
+              maxLoopCount: ROUTER_MAX_LOOPS,
+              padding: options.padding || 28,
+              startDirections: [sourceSide],
+              endDirections: [targetSide],
+            },
+          },
+      connector: radial
+        ? { name: "smooth" }
+        : { name: "rounded", args: { radius: 12 } },
       attrs: {
         line: trafficLineAttrs(theme, flowing),
       },
@@ -398,6 +414,264 @@
     return { root, rootSystem, groups, rootContainers };
   }
 
+  function polarPoint(center, radiusX, radiusY, angleDegrees) {
+    const angle = (angleDegrees * Math.PI) / 180;
+    return {
+      x: center.x + Math.cos(angle) * radiusX,
+      y: center.y + Math.sin(angle) * radiusY,
+    };
+  }
+
+  function fanPositions(center, directionDegrees, count) {
+    const positions = [];
+    let remaining = count;
+    let offset = 0;
+    let ring = 0;
+
+    while (remaining > 0) {
+      const capacity = FAN_FIRST_CAPACITY + ring * FAN_CAPACITY_STEP;
+      const ringCount = Math.min(remaining, capacity);
+      const radius = FAN_START_RADIUS + ring * FAN_RING_GAP;
+      const span =
+        ringCount <= 1
+          ? 0
+          : Math.min(FAN_MAX_SPAN, (ringCount - 1) * 36);
+
+      for (let index = 0; index < ringCount; index += 1) {
+        const progress = ringCount <= 1 ? 0.5 : index / (ringCount - 1);
+        const angle = directionDegrees - span / 2 + span * progress;
+        const point = polarPoint(center, radius, radius, angle);
+        positions.push({
+          x: point.x - SYSTEM_NODE_WIDTH / 2,
+          y: point.y - NODE_HEIGHT / 2,
+          center: point,
+          angle,
+          index: offset + index,
+        });
+      }
+
+      remaining -= ringCount;
+      offset += ringCount;
+      ring += 1;
+    }
+
+    return positions;
+  }
+
+  function smoothVertex(source, target, bend = 0) {
+    const dx = target.x - source.x;
+    const dy = target.y - source.y;
+    const distance = Math.hypot(dx, dy) || 1;
+    return {
+      x: (source.x + target.x) / 2 - (dy / distance) * bend,
+      y: (source.y + target.y) / 2 + (dx / distance) * bend,
+    };
+  }
+
+  function renderRadial(options, data, theme, container, layoutWidth) {
+    const viewportHeight = Math.max(container.clientHeight, 1);
+    const center = {
+      x: layoutWidth / 2,
+      y: viewportHeight / 2,
+    };
+    const { Graph } = window.X6;
+
+    graph = new Graph({
+      container,
+      width: layoutWidth,
+      height: viewportHeight,
+      background: { color: "transparent" },
+      grid: {
+        visible: true,
+        size: GRID_SIZE,
+        type: "dot",
+        args: { color: theme.grid, thickness: 1 },
+      },
+      interacting: false,
+      panning: { enabled: true, eventTypes: ["leftMouseDown", "mouseWheel"] },
+      mousewheel: {
+        enabled: true,
+        modifiers: ["ctrl", "meta"],
+        minScale: 0.2,
+        maxScale: 1.5,
+      },
+    });
+
+    const rootNode = addSystemNode(
+      graph,
+      data.root,
+      {
+        x: center.x - ROOT_NODE_WIDTH / 2,
+        y: center.y - NODE_HEIGHT / 2,
+        index: "root",
+        fallbackName: options.rootName,
+      },
+      theme,
+      true,
+    );
+
+    const renderedGroups = data.groups.map((group, index) => {
+      const angle =
+        data.groups.length <= 1
+          ? 90
+          : 180 - (180 * index) / (data.groups.length - 1);
+      const systemCenter = polarPoint(
+        center,
+        SYSTEM_ORBIT_X,
+        SYSTEM_ORBIT_Y,
+        angle,
+      );
+      const systemOnline = !group.system.virtual && isOnline(group.system.status);
+      const systemNode = addSystemNode(
+        graph,
+        group.system,
+        {
+          x: systemCenter.x - SYSTEM_NODE_WIDTH / 2,
+          y: systemCenter.y - NODE_HEIGHT / 2,
+          index,
+          fallbackName: "未命名系统",
+        },
+        theme,
+      );
+      const childPositions = fanPositions(
+        systemCenter,
+        angle,
+        group.containers.length,
+      );
+      const containerNodes = group.containers.map((record, containerIndex) => {
+        const recordedOnline = isOnline(record.status || record.health);
+        const containerOnline = group.system.virtual
+          ? recordedOnline
+          : systemOnline;
+        return addContainerNode(
+          graph,
+          record,
+          childPositions[containerIndex],
+          theme,
+          containerOnline,
+        );
+      });
+      return {
+        angle,
+        group,
+        index,
+        systemCenter,
+        systemNode,
+        childPositions,
+        containerNodes,
+      };
+    });
+
+    const rootContainerPositions = fanPositions(
+      center,
+      -90,
+      data.rootContainers.length,
+    );
+    const rootOnline = isOnline(data.root.status);
+    const rootContainerNodes = data.rootContainers.map((record, index) =>
+      addContainerNode(
+        graph,
+        record,
+        rootContainerPositions[index],
+        theme,
+        rootOnline,
+      ),
+    );
+
+    renderedGroups.forEach((layout) => {
+      const branchFlowing = layout.group.containers.some((record) =>
+        hasNetworkTraffic(record.net),
+      );
+      addEdge(graph, rootNode, layout.systemNode, theme, {
+        radial: true,
+        flowing: branchFlowing,
+        trafficKey: `system-${text(layout.group.system.id, layout.index)}`,
+        vertices: [
+          smoothVertex(
+            center,
+            layout.systemCenter,
+            spreadOffset(layout.index, renderedGroups.length, 44),
+          ),
+        ],
+      });
+
+      layout.group.containers.forEach((record, index) => {
+        const target = layout.childPositions[index].center;
+        addEdge(
+          graph,
+          layout.systemNode,
+          layout.containerNodes[index],
+          theme,
+          {
+            radial: true,
+            flowing: hasNetworkTraffic(record.net),
+            trafficKey: `container-${text(record.id, index)}`,
+            vertices: [
+              smoothVertex(
+                layout.systemCenter,
+                target,
+                spreadOffset(index, layout.group.containers.length, 28),
+              ),
+            ],
+          },
+        );
+      });
+    });
+
+    data.rootContainers.forEach((record, index) => {
+      const target = rootContainerPositions[index].center;
+      addEdge(graph, rootNode, rootContainerNodes[index], theme, {
+        radial: true,
+        flowing: hasNetworkTraffic(record.net),
+        trafficKey: `container-${text(record.id, index)}`,
+        vertices: [
+          smoothVertex(
+            center,
+            target,
+            spreadOffset(index, data.rootContainers.length, 28),
+          ),
+        ],
+      });
+    });
+
+    graph.on("node:click", ({ node }) => {
+      const nodeData = node.getData();
+      if (nodeData?.type !== "system" || nodeData.record?.virtual) return;
+      const id = text(nodeData.record?.id);
+      if (id) window.parent.location.href = `/system/${encodeURIComponent(id)}`;
+    });
+
+    graph.centerContent();
+    graph.zoomToFit({ padding: 52, minScale: 0.22, maxScale: 0.9 });
+
+    resizeObserver = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width;
+      const height = entries[0]?.contentRect.height;
+      if (!width || !height || !graph) return;
+      const nextWidth = Math.max(width, 320);
+      const nextHeight = Math.max(height, 1);
+      if (
+        Math.abs(nextWidth - layoutWidth) > 1 ||
+        Math.abs(nextHeight - viewportHeight) > 1
+      ) {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => render(lastOptions || options), 100);
+        return;
+      }
+      graph.resize(nextWidth, nextHeight);
+    });
+    resizeObserver.observe(container);
+
+    return {
+      rootFound: Boolean(data.rootSystem),
+      root: data.root,
+      systems: Array.isArray(options.systems) ? options.systems.length : 0,
+      containers: Array.isArray(options.containers) ? options.containers.length : 0,
+      unassigned:
+        data.groups.find((group) => group.unassigned)?.containers.length || 0,
+    };
+  }
+
   function render(options) {
     const container = options?.container;
     if (!(container instanceof HTMLElement)) {
@@ -417,6 +691,7 @@
     const theme = colors();
     const data = groupData(options.systems, options.containers, options.rootName);
     const layoutWidth = Math.max(container.clientWidth, 320);
+    return renderRadial(options, data, theme, container, layoutWidth);
     const rootCenterIndex = Math.floor(data.rootContainers.length / 2);
     const rootSideLaneCount = data.rootContainers.length
       ? Math.max(
