@@ -487,7 +487,13 @@
         type: "dot",
         args: { color: theme.grid, thickness: 1 },
       },
-      interacting: false,
+      interacting: {
+        nodeMovable: true,
+        edgeMovable: false,
+        edgeLabelMovable: false,
+        arrowheadMovable: false,
+        vertexMovable: false,
+      },
       panning: { enabled: true, eventTypes: ["leftMouseDown"] },
       mousewheel: {
         enabled: true,
@@ -821,7 +827,13 @@
         type: "dot",
         args: { color: theme.grid, thickness: 1 },
       },
-      interacting: false,
+      interacting: {
+        nodeMovable: true,
+        edgeMovable: false,
+        edgeLabelMovable: false,
+        arrowheadMovable: false,
+        vertexMovable: false,
+      },
       panning: { enabled: true, eventTypes: ["leftMouseDown"] },
       mousewheel: {
         enabled: true,
