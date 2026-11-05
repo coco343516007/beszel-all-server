@@ -5,6 +5,8 @@
   const GRID_SIZE = 16;
   const ROUTER_STEP = 8;
   const ROUTER_MAX_LOOPS = 10_000;
+  const SYSTEM_NODE_WIDTH = 248;
+  const ROOT_NODE_WIDTH = 238;
   const SLOT_WIDTH = 272;
   const BASE_COLUMN_GAP = 32;
   const EDGE_LANE_GAP = 12;
@@ -292,7 +294,7 @@
       shape: "beszel-topology-node",
       x: position.x,
       y: position.y,
-      width: root ? 238 : 248,
+      width: root ? ROOT_NODE_WIDTH : SYSTEM_NODE_WIDTH,
       height: NODE_HEIGHT,
       data: { type: "system", record: system, root },
       attrs: makeNodeAttrs(theme, {
@@ -326,7 +328,7 @@
       shape: "beszel-topology-node",
       x: position.x,
       y: position.y,
-      width: 272,
+      width: SYSTEM_NODE_WIDTH,
       height: NODE_HEIGHT,
       data: { type: "container", record: container },
       attrs: makeNodeAttrs(theme, {
@@ -447,7 +449,7 @@
     groups.forEach(({ column, group }) => {
       columnLaneCounts[column] = Math.max(
         columnLaneCounts[column],
-        group.containers.length,
+        Math.max(0, group.containers.length - 1),
       );
     });
     const columnGaps = columnLaneCounts.map((laneCount) =>
@@ -464,8 +466,9 @@
     const nodeGridWidth = columnOffsets.at(-1) + SLOT_WIDTH;
     const systemContentWidth = nodeGridWidth + columnGaps.at(-1);
     const rootContainerWidth = data.rootContainers.length
-      ? data.rootContainers.length * SLOT_WIDTH +
-        (data.rootContainers.length - 1) * ROOT_CONTAINER_GAP
+      ? SYSTEM_NODE_WIDTH +
+        (data.rootContainers.length - 1) *
+          (SLOT_WIDTH + ROOT_CONTAINER_GAP)
       : 0;
     const contentWidth = Math.max(systemContentWidth, rootContainerWidth);
     const contentLeft = Math.max(SIDE_PADDING, (layoutWidth - contentWidth) / 2);
@@ -480,10 +483,11 @@
 
     groups.forEach((groupLayout) => {
       const x = columnX(groupLayout.column);
-      groupLayout.systemPosition.x = x + (SLOT_WIDTH - 248) / 2;
+      groupLayout.systemPosition.x =
+        x + (SLOT_WIDTH - SYSTEM_NODE_WIDTH) / 2;
       groupLayout.laneStartX = x + SLOT_WIDTH + EDGE_LANE_MARGIN;
       groupLayout.childPositions.forEach((position) => {
-        position.x = x;
+        position.x = x + (SLOT_WIDTH - SYSTEM_NODE_WIDTH) / 2;
       });
     });
     rootContainerPositions.forEach((position, index) => {
@@ -519,7 +523,7 @@
       graph,
       data.root,
       {
-        x: contentLeft + (contentWidth - 238) / 2,
+        x: contentLeft + (contentWidth - ROOT_NODE_WIDTH) / 2,
         y: ROOT_Y,
         index: "root",
         fallbackName: options.rootName,
@@ -597,8 +601,25 @@
         rootEdgeIndex += 1;
 
         groupLayout.group.containers.forEach((record, containerIndex) => {
+          if (containerIndex === 0) {
+            addEdge(
+              graph,
+              systemNode,
+              containerNodes[containerIndex],
+              theme,
+              {
+                flowing: hasNetworkTraffic(record.net),
+                trafficKey: `container-${text(record.id, containerIndex)}`,
+                sourceSide: "bottom",
+                targetSide: "top",
+                padding: 4,
+              },
+            );
+            return;
+          }
+
           const laneX =
-            groupLayout.laneStartX + containerIndex * EDGE_LANE_GAP;
+            groupLayout.laneStartX + (containerIndex - 1) * EDGE_LANE_GAP;
           const sourceY = groupLayout.systemPosition.y + NODE_HEIGHT / 2;
           const targetY =
             groupLayout.childPositions[containerIndex].y + NODE_HEIGHT / 2;
