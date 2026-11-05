@@ -488,10 +488,9 @@
         args: { color: theme.grid, thickness: 1 },
       },
       interacting: false,
-      panning: { enabled: true, eventTypes: ["leftMouseDown", "mouseWheel"] },
+      panning: { enabled: true, eventTypes: ["leftMouseDown"] },
       mousewheel: {
         enabled: true,
-        modifiers: ["ctrl", "meta"],
         minScale: 0.2,
         maxScale: 1.5,
       },
@@ -823,10 +822,9 @@
         args: { color: theme.grid, thickness: 1 },
       },
       interacting: false,
-      panning: { enabled: true, eventTypes: ["leftMouseDown", "mouseWheel"] },
+      panning: { enabled: true, eventTypes: ["leftMouseDown"] },
       mousewheel: {
         enabled: true,
-        modifiers: ["ctrl", "meta"],
         minScale: 0.25,
         maxScale: 1.5,
       },
