@@ -2,11 +2,18 @@
   "use strict";
 
   const NODE_HEIGHT = 64;
+  const GRID_SIZE = 16;
+  const ROUTER_STEP = 8;
+  const ROUTER_MAX_LOOPS = 10_000;
   const SLOT_WIDTH = 272;
-  const COLUMN_GAP = 32;
+  const BASE_COLUMN_GAP = 32;
+  const EDGE_LANE_GAP = 12;
+  const EDGE_LANE_MARGIN = 16;
+  const ROOT_CONTAINER_GAP = 24;
   const SIDE_PADDING = 32;
-  const ROOT_Y = 42;
-  const GROUP_START_Y = 194;
+  const ROOT_CONTAINER_Y = 32;
+  const ROOT_Y = 144;
+  const GROUP_START_Y = 280;
   const CHILD_GAP = 40;
   const NODE_GAP = 24;
   const GROUP_GAP = 48;
@@ -239,21 +246,34 @@
 
   function addEdge(graphInstance, source, target, theme, options = {}) {
     const flowing = Boolean(options.flowing);
+    const sourceSide = options.sourceSide || "bottom";
+    const targetSide = options.targetSide || "top";
+
+    function anchor(side, offset = 0) {
+      const args = ["left", "right"].includes(side)
+        ? { dy: offset }
+        : { dx: offset };
+      return { name: side, args };
+    }
+
     graphInstance.addEdge({
       source: {
         cell: source.id,
-        anchor: { name: "bottom", args: { dx: options.sourceOffset || 0 } },
+        anchor: anchor(sourceSide, options.sourceOffset || 0),
       },
       target: {
         cell: target.id,
-        anchor: { name: "top", args: { dx: options.targetOffset || 0 } },
+        anchor: anchor(targetSide, options.targetOffset || 0),
       },
+      vertices: Array.isArray(options.vertices) ? options.vertices : [],
       router: {
         name: "manhattan",
         args: {
+          step: ROUTER_STEP,
+          maxLoopCount: ROUTER_MAX_LOOPS,
           padding: options.padding || 28,
-          startDirections: ["bottom"],
-          endDirections: ["top"],
+          startDirections: [sourceSide],
+          endDirections: [targetSide],
         },
       },
       connector: { name: "rounded", args: { radius: 12 } },
@@ -391,36 +411,17 @@
     const theme = colors();
     const data = groupData(options.systems, options.containers, options.rootName);
     const layoutWidth = Math.max(container.clientWidth, 320);
-    const columnCount = Math.max(
-      1,
-      Math.floor(
-        (layoutWidth - SIDE_PADDING * 2 + COLUMN_GAP) /
-          (SLOT_WIDTH + COLUMN_GAP),
-      ),
-    );
-    const gridWidth = columnCount * SLOT_WIDTH + (columnCount - 1) * COLUMN_GAP;
-    const gridLeft = Math.max(0, (layoutWidth - gridWidth) / 2);
+    // Every non-root system owns one column so the complete system layer is
+    // always laid out horizontally. The canvas is zoomed to fit when the row
+    // is wider than the viewport.
+    const columnCount = Math.max(1, data.groups.length);
     const columnHeights = Array(columnCount).fill(GROUP_START_Y);
     const groups = [];
 
-    function shortestColumn() {
-      let target = 0;
-      for (let index = 1; index < columnHeights.length; index += 1) {
-        if (columnHeights[index] < columnHeights[target]) target = index;
-      }
-      return target;
-    }
-
-    function columnX(index) {
-      return gridLeft + index * (SLOT_WIDTH + COLUMN_GAP);
-    }
-
-    for (const group of data.groups) {
-      const targetColumn = shortestColumn();
-      const x = columnX(targetColumn);
-      const systemY = columnHeights[targetColumn];
+    for (const [groupIndex, group] of data.groups.entries()) {
+      const targetColumn = groupIndex;
+      const systemY = GROUP_START_Y;
       const childPositions = group.containers.map((_, index) => ({
-        x,
         y: systemY + NODE_HEIGHT + CHILD_GAP + index * (NODE_HEIGHT + NODE_GAP),
         index,
       }));
@@ -429,23 +430,65 @@
       columnHeights[targetColumn] = blockBottom + GROUP_GAP;
       groups.push({
         group,
+        column: targetColumn,
         childPositions,
         systemPosition: {
-          x: x + (SLOT_WIDTH - 248) / 2,
           y: systemY,
         },
       });
     }
 
-    const rootContainerPositions = data.rootContainers.map((_, index) => {
-      const targetColumn = shortestColumn();
-      const position = {
-        x: columnX(targetColumn),
-        y: columnHeights[targetColumn],
-        index,
-      };
-      columnHeights[targetColumn] += NODE_HEIGHT + GROUP_GAP;
-      return position;
+    const rootContainerPositions = data.rootContainers.map((_, index) => ({
+      y: ROOT_CONTAINER_Y,
+      index,
+    }));
+
+    const columnLaneCounts = Array(columnCount).fill(0);
+    groups.forEach(({ column, group }) => {
+      columnLaneCounts[column] = Math.max(
+        columnLaneCounts[column],
+        group.containers.length,
+      );
+    });
+    const columnGaps = columnLaneCounts.map((laneCount) =>
+      Math.max(
+        BASE_COLUMN_GAP,
+        EDGE_LANE_MARGIN * 2 + Math.max(0, laneCount - 1) * EDGE_LANE_GAP,
+      ),
+    );
+    const columnOffsets = Array(columnCount).fill(0);
+    for (let index = 1; index < columnCount; index += 1) {
+      columnOffsets[index] =
+        columnOffsets[index - 1] + SLOT_WIDTH + columnGaps[index - 1];
+    }
+    const nodeGridWidth = columnOffsets.at(-1) + SLOT_WIDTH;
+    const systemContentWidth = nodeGridWidth + columnGaps.at(-1);
+    const rootContainerWidth = data.rootContainers.length
+      ? data.rootContainers.length * SLOT_WIDTH +
+        (data.rootContainers.length - 1) * ROOT_CONTAINER_GAP
+      : 0;
+    const contentWidth = Math.max(systemContentWidth, rootContainerWidth);
+    const contentLeft = Math.max(SIDE_PADDING, (layoutWidth - contentWidth) / 2);
+    const gridLeft =
+      contentLeft + Math.max(0, (contentWidth - systemContentWidth) / 2);
+    const rootContainerLeft =
+      contentLeft + Math.max(0, (contentWidth - rootContainerWidth) / 2);
+
+    function columnX(index) {
+      return gridLeft + columnOffsets[index];
+    }
+
+    groups.forEach((groupLayout) => {
+      const x = columnX(groupLayout.column);
+      groupLayout.systemPosition.x = x + (SLOT_WIDTH - 248) / 2;
+      groupLayout.laneStartX = x + SLOT_WIDTH + EDGE_LANE_MARGIN;
+      groupLayout.childPositions.forEach((position) => {
+        position.x = x;
+      });
+    });
+    rootContainerPositions.forEach((position, index) => {
+      position.x =
+        rootContainerLeft + index * (SLOT_WIDTH + ROOT_CONTAINER_GAP);
     });
 
     const viewportHeight = Math.max(container.clientHeight, 1);
@@ -458,7 +501,7 @@
       background: { color: "transparent" },
       grid: {
         visible: true,
-        size: 16,
+        size: GRID_SIZE,
         type: "dot",
         args: { color: theme.grid, thickness: 1 },
       },
@@ -476,7 +519,7 @@
       graph,
       data.root,
       {
-        x: (layoutWidth - 238) / 2,
+        x: contentLeft + (contentWidth - 238) / 2,
         y: ROOT_Y,
         index: "root",
         fallbackName: options.rootName,
@@ -485,16 +528,13 @@
       true,
     );
 
-    const rootEdgeCount = groups.length + data.rootContainers.length;
-    let rootEdgeIndex = 0;
-
-    for (const [index, groupLayout] of groups.entries()) {
+    // Manhattan routing can only avoid nodes that already exist in the graph.
+    // Create every node first, then calculate all edges against the complete
+    // obstacle set.
+    const renderedGroups = groups.map((groupLayout, index) => {
       const systemOnline =
         !groupLayout.group.system.virtual &&
         isOnline(groupLayout.group.system.status);
-      const branchFlowing = groupLayout.group.containers.some((record) =>
-        hasNetworkTraffic(record.net),
-      );
       const systemNode = addSystemNode(
         graph,
         groupLayout.group.system,
@@ -505,74 +545,99 @@
         },
         theme,
       );
-      addEdge(
-        graph,
-        rootNode,
-        systemNode,
-        theme,
-        {
-          flowing: branchFlowing,
-          trafficKey: `system-${text(groupLayout.group.system.id, index)}`,
-          sourceOffset: spreadOffset(rootEdgeIndex, rootEdgeCount, 170),
-          padding: 34,
+      const containerNodes = groupLayout.group.containers.map(
+        (record, containerIndex) => {
+          const recordedOnline = isOnline(record.status || record.health);
+          const containerOnline = groupLayout.group.system.virtual
+            ? recordedOnline
+            : systemOnline;
+          return addContainerNode(
+            graph,
+            record,
+            groupLayout.childPositions[containerIndex],
+            theme,
+            containerOnline,
+          );
         },
       );
-      rootEdgeIndex += 1;
-      groupLayout.group.containers.forEach((record, containerIndex) => {
-        const recordedOnline = isOnline(record.status || record.health);
-        const containerOnline = groupLayout.group.system.virtual
-          ? recordedOnline
-          : systemOnline;
-        const edgeOffset = spreadOffset(
-          containerIndex,
-          groupLayout.group.containers.length,
-          160,
-        );
-        const containerNode = addContainerNode(
-          graph,
-          record,
-          groupLayout.childPositions[containerIndex],
-          theme,
-          containerOnline,
-        );
-        addEdge(
-          graph,
-          systemNode,
-          containerNode,
-          theme,
-          {
-            flowing: hasNetworkTraffic(record.net),
-            trafficKey: `container-${text(record.id, containerIndex)}`,
-            sourceOffset: edgeOffset,
-            targetOffset: edgeOffset,
-            padding: 20,
-          },
-        );
-      });
-    }
+      return { groupLayout, index, systemNode, containerNodes };
+    });
 
-    data.rootContainers.forEach((record, index) => {
-      const rootOnline = isOnline(data.root.status);
-      const containerNode = addContainerNode(
+    const rootOnline = isOnline(data.root.status);
+    const rootContainerNodes = data.rootContainers.map((record, index) =>
+      addContainerNode(
         graph,
         record,
         rootContainerPositions[index],
         theme,
         rootOnline,
-      );
+      ),
+    );
+
+    const rootEdgeCount = renderedGroups.length;
+    let rootEdgeIndex = 0;
+
+    renderedGroups.forEach(
+      ({ groupLayout, index, systemNode, containerNodes }) => {
+        const branchFlowing = groupLayout.group.containers.some((record) =>
+          hasNetworkTraffic(record.net),
+        );
+        addEdge(
+          graph,
+          rootNode,
+          systemNode,
+          theme,
+          {
+            flowing: branchFlowing,
+            trafficKey: `system-${text(groupLayout.group.system.id, index)}`,
+            sourceOffset: spreadOffset(rootEdgeIndex, rootEdgeCount, 170),
+            padding: 4,
+          },
+        );
+        rootEdgeIndex += 1;
+
+        groupLayout.group.containers.forEach((record, containerIndex) => {
+          const laneX =
+            groupLayout.laneStartX + containerIndex * EDGE_LANE_GAP;
+          const sourceY = groupLayout.systemPosition.y + NODE_HEIGHT / 2;
+          const targetY =
+            groupLayout.childPositions[containerIndex].y + NODE_HEIGHT / 2;
+          addEdge(
+            graph,
+            systemNode,
+            containerNodes[containerIndex],
+            theme,
+            {
+              flowing: hasNetworkTraffic(record.net),
+              trafficKey: `container-${text(record.id, containerIndex)}`,
+              sourceSide: "right",
+              targetSide: "right",
+              vertices: [
+                { x: laneX, y: sourceY },
+                { x: laneX, y: targetY },
+              ],
+              padding: 4,
+            },
+          );
+        });
+      },
+    );
+
+    data.rootContainers.forEach((record, index) => {
       addEdge(
         graph,
         rootNode,
-        containerNode,
+        rootContainerNodes[index],
         theme,
         {
           flowing: hasNetworkTraffic(record.net),
           trafficKey: `container-${text(record.id, index)}`,
-          sourceOffset: spreadOffset(rootEdgeIndex, rootEdgeCount, 170),
-          padding: 34,
+          sourceSide: "top",
+          targetSide: "bottom",
+          sourceOffset: spreadOffset(index, data.rootContainers.length, 170),
+          padding: 4,
         },
       );
-      rootEdgeIndex += 1;
     });
 
     graph.on("node:click", ({ node }) => {
@@ -583,7 +648,7 @@
     });
 
     graph.centerContent();
-    graph.zoomToFit({ padding: 36, minScale: 0.55, maxScale: 1 });
+    graph.zoomToFit({ padding: 36, minScale: 0.45, maxScale: 1 });
 
     resizeObserver = new ResizeObserver((entries) => {
       const width = entries[0]?.contentRect.width;
